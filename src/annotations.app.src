@@ -1,0 +1,12 @@
+{application, annotations,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { annotations_app, []}},
+  {env, []}
+ ]}.
