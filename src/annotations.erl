@@ -23,7 +23,13 @@
 %% -----------------------------------------------------------------------------
 -module(annotations).
 
--export([parse_trasform/2]).
+-export([parse_transform/2]).
 
-parse_trasform(AST, Options) ->
-    annotations_pt:parse_trasform(AST, Options).
+-type(scope() :: 'application' | 'package' | 'module' | 'function').
+-export_type([scope/0]).
+-include("types.hrl").
+-type(annotation() :: #annotation{}).
+-export_type([annotation/0]).
+
+parse_transform(AST, Options) ->
+    annotations_pt:parse_transform(AST, Options).

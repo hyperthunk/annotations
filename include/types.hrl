@@ -21,5 +21,9 @@
 %% THE SOFTWARE.
 %%
 %% -----------------------------------------------------------------------------
--compile({parse_transform, annotations}).
--include_lib("annotations/include/types.hrl").
+
+-record(annotation, {
+    name    :: atom(),
+    scope   :: annotations:scope(),
+    data    :: term()
+}).

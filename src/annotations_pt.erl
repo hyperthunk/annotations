@@ -30,7 +30,10 @@ parse_transform(Forms0, Options) ->
     Opt = merge_options(Options),
     {Forms, FunAccs, _} = 
         lists:foldl(fun pick_annotations/2, {[], [], Opt}, Forms0),
-    io:format("FunAccs: ~p~n", [FunAccs]),
+    process_fun_accs(FunAccs, Forms).
+
+process_fun_accs(FuncAccs, Forms) ->
+    io:format("FunAccs: ~p~n", [FuncAccs]),
     Attributes = [ A || {attribute, _, _, _}=A <- Forms ],
     Other = [ B || B <- Forms, element(1, B) =/= attribute ],
     io:format("Attributes: ~p~n", [Attributes]),
@@ -57,7 +60,8 @@ pick_annotations({function, _, FName, _, _}=Form,
                 lists:keyreplace(FName, 1, FuncAccs,
                     {FName, [Annotation|Annotations]}), Opt}
     end;
-pick_annotations(Form, {Acc1, Acc2, Opt}) -> {[Form|Acc1], Acc2, Opt}.
+pick_annotations(Form, {Acc1, Acc2, Opt}) -> 
+    {[Form|Acc1], Acc2, Opt}.
 
 merge_options(Options) ->
     {ok, Dir} = file:get_cwd(),
