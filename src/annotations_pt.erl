@@ -28,51 +28,116 @@ parse_transform(Forms0, Options) ->
     {ok, P} = file:get_cwd(),
     io:format("~s: Options: ~p~n", [P, Options]),
     Opt = merge_options(Options),
-    {Forms, FunAccs, _} = 
+    {Forms, FunAccs, _} =
         lists:foldl(fun pick_annotations/2, {[], [], Opt}, Forms0),
-    process_fun_accs(FunAccs, Forms).
+    process_fun_accs(FunAccs, Forms, Opt).
 
-process_fun_accs(FuncAccs, Forms) ->
+process_fun_accs(FuncAccs, Forms, Opt) ->
+    
+    %% TODO: should these annotations be able to alter
+    %%       the things they are applied to!?
+    
     io:format("FunAccs: ~p~n", [FuncAccs]),
-    Attributes = [ A || {attribute, _, _, _}=A <- Forms ],
+    Mod = current_scope(Forms),
+    ScopedAnnotations =
+        [ annotations:from_ast(Form, {function, {Mod,Fn,A}}) ||
+                              {{Fn, A}, Mapped} <- FuncAccs, Form <- Mapped ],
+    io:format("ScopedAnnotations: ~p~n", [ScopedAnnotations]),
+    Attributes = [ process_attribute(A, Mod, Opt) ||
+                                            {attribute, _, _, _}=A <- Forms ],
     Other = [ B || B <- Forms, element(1, B) =/= attribute ],
     io:format("Attributes: ~p~n", [Attributes]),
     io:format("Other: ~p~n", [Other]),
-    lists:reverse(Attributes) ++ lists:reverse(Other).
+    NewForms = lists:reverse(Attributes) ++
+               [ {attribute, 3, annotation, A} || A <- ScopedAnnotations ] ++
+               lists:reverse(Other),
+    io:format("~p~n", [NewForms]),
+    NewForms.
 
-pick_annotations({attribute, _, _, _}=Form, 
+process_attribute({attribute, L, N, _}=A, Mod, Opt) ->
+    case is_annotation(N, Opt) of
+        false -> A;
+        _True ->
+            {attribute, L, annotation, annotations:from_ast(A, {'module', Mod})}
+    end.
+
+pick_annotations({attribute, _, _, _}=Form,
                     {Forms, [{maybe,_}|_]=FuncAccs, Opt}) ->
     {[Form|Forms], FuncAccs, Opt};
 pick_annotations({attribute, _, Name, _}=Form, {Forms, FuncAccs, Opt}) ->
-    case lists:member(Name, proplists:get_value(annotations, Opt, [])) of
-        true ->
-            {Forms, [{maybe, Form}|FuncAccs], Opt};
+    case is_annotation(Name, Opt) of
         false ->
-            {[Form|Forms], FuncAccs, Opt}
+            {[Form|Forms], FuncAccs, Opt};
+        _True ->
+            {Forms, [{maybe, Form}| FuncAccs], Opt}
     end;
-pick_annotations({function, _, FName, _, _}=Form,
+pick_annotations({function, _, FName, Arity, _}=Form,
                  {Forms, [{maybe, Annotation}|FuncAccs], Opt}) ->
     case lists:keyfind(FName, 1, FuncAccs) of
         false ->
-            {[Form|Forms], [{FName, [Annotation]}|FuncAccs], Opt};
+            {[Form|Forms], [{{FName, Arity}, [Annotation]}|FuncAccs], Opt};
         {FName, Annotations} ->
             {[Form|Forms],
-                lists:keyreplace(FName, 1, FuncAccs,
-                    {FName, [Annotation|Annotations]}), Opt}
+                lists:keyreplace({FName, Arity}, 1, FuncAccs,
+                                {FName, [Annotation|Annotations]}), Opt}
     end;
-pick_annotations(Form, {Acc1, Acc2, Opt}) -> 
+pick_annotations(Form, {Acc1, Acc2, Opt}) ->
     {[Form|Acc1], Acc2, Opt}.
+
+current_scope(Forms) ->
+    {attribute,_,module,Name} = lists:keyfind(module, 3, Forms),
+    Name.
+
+is_annotation(Name, Opt) ->
+    Reg = proplists:get_value(registered, Opt, []),
+    case lists:member(Name, Reg) of
+        true ->
+            true;
+        false ->
+            annotations:is_annotation(Name)
+    end.
 
 merge_options(Options) ->
     {ok, Dir} = file:get_cwd(),
+    progress_message("Look for annotations.config in ~s~n", [Dir]),
     case filelib:fold_files(Dir, "annotations.config", true, fun accf/2, []) of
         [] ->
+            progress_message("No annotations.config found - "
+                             "proceeding with defalut settings.~n", []),
             Options;
         [Config|_] ->
+            progress_message("Found ~s!~n", [Config]),
             case file:consult(Config) of
-                {ok, Terms} -> Terms;
+                {ok, [Terms]} -> Terms;
                 _ -> Options
             end
     end.
 
 accf(F, Acc) -> [F | Acc].
+
+progress_message(Msg, Args) ->
+    case is_verbose() of
+        true ->
+            io:format(Msg, Args);
+        rebar_verbose ->
+            rebar_log:log(debug, Msg, Args);
+        _ -> ok
+    end.
+
+is_verbose() ->
+    case application:get_env(rebar_global, verbose) of
+        false     -> check_env();
+        {ok, "0"} -> check_env();
+        {ok, "1"} -> rebar_verbose
+    end.
+
+check_env() ->
+    case os:getenv("ANNOTATIONS_TRANSFORM_VERBOSE") of
+        false ->
+            case get('annotations.transform.verbose') of
+                undefined -> false;
+                – -> true
+            end;
+        _Other ->
+            true
+    end.

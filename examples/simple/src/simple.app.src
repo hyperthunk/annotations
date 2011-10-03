@@ -1,0 +1,10 @@
+{application, simple,
+ [
+  {description, "Simple example of using Annotations"},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]}
+ ]}.

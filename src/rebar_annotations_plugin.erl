@@ -25,17 +25,18 @@
 
 -export([pre_compile/2, post_compile/2]).
 
-pre_compile(_, undefined) -> ok;
 pre_compile(Config, _) ->
     case get_config(Config) of
         {config, AnnotationsConfig} ->
-            file:write_file(config_file(), 
+            CF = config_file(),
+            io:format("Writing config to ~s~n", [CF]),
+            file:write_file(CF, 
                             printable(AnnotationsConfig), [write]);
         _ ->
+            rebar_log:log(debug, "Bad config!~n", []),
             ok
     end.
 
-post_compile(_, undefined) -> ok;
 post_compile(Config, _) ->
     case get_config(Config) of
         {config, _} ->

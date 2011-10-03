@@ -21,9 +21,16 @@
 %% THE SOFTWARE.
 %%
 %% -----------------------------------------------------------------------------
+-module(annotation).
+-export([behaviour_info/1]).
+-annotation(['application', 'package', 'module']).
 
--record(annotation, {
-    name    :: atom(),
-    scope   :: annotations:annotation_scope(),
-    data    :: term()
-}).
+-include("types.hrl").
+
+behaviour_info(callbacks) ->
+    [{process_annotation, 2}, {get_scope, 0}];
+behaviour_info(_) ->
+    undefined.
+
+%% this is a special case annotation that doesn't actually get parse_transform-ed
+%% not is it declared as a behaviour.
