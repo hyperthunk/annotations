@@ -136,7 +136,7 @@ check_env() ->
         false ->
             case get('annotations.transform.verbose') of
                 undefined -> false;
-                – -> true
+                _ -> true
             end;
         _Other ->
             true
