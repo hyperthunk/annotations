@@ -51,8 +51,33 @@ process_fun_accs(FuncAccs, Forms, Opt) ->
     NewForms = lists:reverse(Attributes) ++
                [ {attribute, 3, annotation, A} || A <- ScopedAnnotations ] ++
                lists:reverse(Other),
-    io:format("~p~n", [NewForms]),
-    NewForms.
+    maybe_apply_changes(NewForms, ScopedAnnotations).
+
+maybe_apply_changes(Forms, ScopedAnnotations) ->
+    %lists:foldl(fun maybe_process_annotation/2, {ScopedAnnotations, [], NewForms).
+    {Forms2, _Acc2} =
+        parse_trans:transform(fun xform_fun/4, ScopedAnnotations, Forms, []),
+    parse_trans:revert(Forms2).
+    
+xform_fun(function, Form, Ctx, Annotations) ->
+    Module = parse_trans:context(module, Ctx),
+    {Name, Arity} = erl_syntax_lib:analyze_function(Form),
+    Applicable = [ A || A <- Annotations,
+                        check_scope({function, {Module, Name, Arity}}, A) ],
+    io:format("Applicable: ~p~n", [Applicable]),
+    {[], Form, [], true, Annotations};
+xform_fun(_Thing, Form, _Ctx, Annotations) ->
+    {[], Form, [], true, Annotations}.
+
+check_scope(Scope, Annotation) ->
+    Allowed = annotations:get_scope(Annotation),
+    case annotations:check_scope(Scope, Allowed) of
+        ok ->
+            true;
+        Other ->
+            io:format("Non-matching scope: ~p~n", [Other]),
+            false
+    end.
 
 process_attribute({attribute, L, N, _}=A, Mod, Opt) ->
     case is_annotation(N, Opt) of

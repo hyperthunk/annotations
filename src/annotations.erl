@@ -28,7 +28,7 @@
 -export([list/1, find_by_function/2, find/2, find/3]).
 
 %% parse_transform and runtime introspection utilities
--export([parse_transform/2, from_ast/2]).
+-export([parse_transform/2, from_ast/2, get_scope/1, check_scope/2]).
 
 -type(target() :: atom() | {atom(), atom(), integer()}).
 -type(scope() :: 'application' | 'package' | 'module' | 'function' | '_').
@@ -145,29 +145,48 @@ from_ast({attribute, _Ln, AnnotationName, AnnotationData}, ActualScope) ->
 filter(Type, Things) ->
     [ A || #annotation{name=N}=A <- Things, N == Type ].
 
-check_scope(RequiredScope, AllowedScope) when is_list(RequiredScope),
+check_scope({Scope0, Target0}=A, {Scope1, Target1}=B) ->
+    case check(Scope0, Scope1) of
+        true ->
+            Checks = check_scope(tuple_to_list(Target0), tuple_to_list(Target1)),
+            case lists:all(fun(X) -> X == ok end, Checks) of
+                true -> ok;
+                false ->
+                    {invalid_scope, {B, A}}
+            end;
+        false ->
+            {invalid_scope, {B, A}}
+    end;
+check_scope(RequiredScope, AllowedScope) when is_list(RequiredScope) andalso
                                               is_list(AllowedScope) ->
     %% [SuppScope, SuppMod, SuppFunc, SuppArity] = unpack_decl(AllowedScope),
     %% [ReqScope, ReqMod, ReqFunc, ReqArity] = unpack_decl(RequiredScope),
-    [ check_scope(A,B) || {A,B} <- lists:zip(unpack_decl(AllowedScope),
-                                             unpack_decl(RequiredScope)) ];
+    [ check_scope(A,B) || {A,B} <- lists:zip(AllowedScope, RequiredScope) ];
 check_scope('_', _) -> ok;
 check_scope(_, '_') -> ok;
-check_scope(Allowed, Required) when is_integer(Allowed) andalso
-                                    is_integer(Required) -> Allowed =:= Required;
-check_scope(Allowed, Required) when is_atom(Allowed) andalso
-                                    is_atom(Required) ->
-    case re:run(atom_to_list(Required), atom_to_list(Allowed)) of
-        {match, _} -> ok;
-        _ -> {invalid_scope, {Allowed, Required}}
+check_scope(Allowed, Required) ->
+    case check(Allowed, Required) of
+        true ->
+            ok;
+        false ->
+            {invalid_scope, {Required, Allowed}}
     end.
 
-unpack_decl({Scope, Target}) when is_atom(Scope) ->
-    unpack_decl([Scope], Target);
-unpack_decl({Scope, Target}) when is_list(Scope) andalso is_atom(Target) ->
-    unpack_decl(Scope, [Target, '_', '_']).
+check(A, B) when is_list(A) andalso is_atom(B) ->
+    lists:member(B, A);
+check(A, B) when is_atom(A) andalso is_list(B) ->
+    lists:member(A, B);
+check(A, B) ->
+    A == B.
 
-unpack_decl(Scope, [M,F,A]=T) when is_list(Scope) andalso
-                                   is_atom(M)     andalso
-                                   is_atom(F)     andalso
-                                   is_integer(A) -> Scope ++ T.
+%unpack_decl(Scope) when is_atom(Scope) ->
+%    [Scope, '_', '_', '_'];
+%unpack_decl({Scope, Target}) when is_atom(Scope) ->
+%    unpack_decl([Scope], Target);
+%unpack_decl({Scope, Target}) when is_list(Scope) andalso is_atom(Target) ->
+%    unpack_decl(Scope, [Target, '_', '_']).
+
+%unpack_decl(Scope, [M,F,A]=T) when is_list(Scope) andalso
+%                                   is_atom(M)     andalso
+%                                   is_atom(F)     andalso
+%                                   is_integer(A) -> Scope ++ T.

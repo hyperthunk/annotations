@@ -32,5 +32,4 @@ behaviour_info(callbacks) ->
 behaviour_info(_) ->
     undefined.
 
-%% this is a special case annotation that doesn't actually get parse_transform-ed
-%% not is it declared as a behaviour.
+%% this is a special case annotation that doesn't actually get parse-transformed.
