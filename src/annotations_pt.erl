@@ -24,50 +24,133 @@
 -module(annotations_pt).
 -export([parse_transform/2]).
 
+-include("types.hrl").
+
 parse_transform(Forms0, Options) ->
     {ok, P} = file:get_cwd(),
-    io:format("~s: Options: ~p~n", [P, Options]),
+    progress_message("~s: Options: ~p~n", [P, Options]),
     Opt = merge_options(Options),
     {Forms, FunAccs, _} =
         lists:foldl(fun pick_annotations/2, {[], [], Opt}, Forms0),
     process_fun_accs(FunAccs, Forms, Opt).
 
 process_fun_accs(FuncAccs, Forms, Opt) ->
-    
+
     %% TODO: should these annotations be able to alter
     %%       the things they are applied to!?
-    
-    io:format("FunAccs: ~p~n", [FuncAccs]),
+
     Mod = current_scope(Forms),
     ScopedAnnotations =
         [ annotations:from_ast(Form, {function, {Mod,Fn,A}}) ||
                               {{Fn, A}, Mapped} <- FuncAccs, Form <- Mapped ],
-    io:format("ScopedAnnotations: ~p~n", [ScopedAnnotations]),
     Attributes = [ process_attribute(A, Mod, Opt) ||
                                             {attribute, _, _, _}=A <- Forms ],
     Other = [ B || B <- Forms, element(1, B) =/= attribute ],
-    io:format("Attributes: ~p~n", [Attributes]),
-    io:format("Other: ~p~n", [Other]),
     NewForms = lists:reverse(Attributes) ++
                [ {attribute, 3, annotation, A} || A <- ScopedAnnotations ] ++
                lists:reverse(Other),
     maybe_apply_changes(NewForms, ScopedAnnotations).
 
-maybe_apply_changes(Forms, ScopedAnnotations) ->
+maybe_apply_changes(Forms0, ScopedAnnotations) ->
     %lists:foldl(fun maybe_process_annotation/2, {ScopedAnnotations, [], NewForms).
-    {Forms2, _Acc2} =
-        parse_trans:transform(fun xform_fun/4, ScopedAnnotations, Forms, []),
-    parse_trans:revert(Forms2).
-    
-xform_fun(function, Form, Ctx, Annotations) ->
+    progress_message("Applying ~p scoped annotations~n", [length(ScopedAnnotations)]),
+    parse_trans:top(fun(Forms, _Context) ->
+                        {Forms2, {_, Acc2}} =
+                            parse_trans:transform(fun xform_fun/4,
+                                    {ScopedAnnotations, []}, Forms, []),
+                        Forms3 = lists:foldl(fun export_orig/2, Forms2, Acc2),
+                        parse_trans:revert(Forms3)
+                    end, Forms0, []).
+
+export_orig({FN, FA}, Acc) ->
+    parse_trans:export_function(FN, FA, Acc).
+
+xform_fun(function, Form, Ctx, {Annotations, Acc}) ->
     Module = parse_trans:context(module, Ctx),
     {Name, Arity} = erl_syntax_lib:analyze_function(Form),
+    progress_message("Processing ~p:~p/~p ...~n", [Module, Name, Arity]),
     Applicable = [ A || A <- Annotations,
                         check_scope({function, {Module, Name, Arity}}, A) ],
-    io:format("Applicable: ~p~n", [Applicable]),
-    {[], Form, [], true, Annotations};
-xform_fun(_Thing, Form, _Ctx, Annotations) ->
-    {[], Form, [], true, Annotations}.
+    progress_message("Found ~p applicable annotations for ~p~n",
+                     [length(Applicable), Module]),
+    {NewForms, Form2, Acc2} = maybe_transform(Module, Form, 
+                                              {Applicable, Acc, []}),
+    {NewForms, Form2, [], true, {Annotations, Acc2}};
+xform_fun(_Thing, Form, _Ctx, Acc) ->
+    {[], Form, [], true, Acc}.
+
+%% TODO: don't move the data around unnecessarily
+
+maybe_transform(_Module, Form, {[], Acc, NewForms}) ->
+    {NewForms, Form, Acc};
+maybe_transform(Module, Form, {[Annotation|Rest], Acc, NewForms}) ->
+    case annotation:has_advice(Annotation) of
+        false ->
+            maybe_transform(Module, Form, {Rest, Acc, NewForms});
+        true ->
+            {Form2, ExtraForms, Exp} = rewrite_form(Module, Form, Annotation),
+            maybe_transform(Module, Form2, 
+                            {Rest, [Exp|Acc], ExtraForms ++ NewForms})
+    end.
+
+rewrite_form(Module, Form, Annotation) ->
+    case annotation:has_advice(around_advice, Annotation) of
+        false ->
+            do_rewrite_form(Module, Form, Annotation);
+        true ->
+            do_rewrite_around_form(Module, Form, Annotation)
+    end.
+
+%% TODO: de-duplicate these two functions
+
+do_rewrite_form(Module, Form, #annotation{name=AnnotationMod}=A) ->
+    Pos = erl_syntax:get_pos(Form),
+    {FName, FArity} = erl_syntax_lib:analyze_function(Form),
+    Clauses = erl_syntax:function_clauses(Form),
+    OrigFN = list_to_atom(atom_to_list(FName) ++ "__original"),
+    NewName = {atom, Pos, OrigFN},
+    OrigImpl = erl_syntax:function(NewName, Clauses),
+
+    VarNames = erl_syntax_lib:new_variable_names(FArity, sets:new()),
+    Vars = erl_syntax:list([ {var, Pos, V} || V <- VarNames ]),
+    ModAST = {atom, Pos, AnnotationMod},
+    BeforeAdviceVarAST = {var,Pos,'AfterAdvised'},
+    PassThrough = case annotation:has_advice(before_advice, A) of
+        false ->
+            erl_syntax:match_expr(BeforeAdviceVarAST, Vars);
+        true ->
+            ApplyBeforeAdviceAST =
+                erl_syntax:application(ModAST, {atom, Pos, before_advice},
+                                       [erl_syntax:abstract(A),
+                                        ModAST, {atom, Pos, FName}, Vars]),
+            erl_syntax:match_expr(BeforeAdviceVarAST, ApplyBeforeAdviceAST)
+    end,
+    %% TODO: should we consider doing a try/catch here!?
+    MatchCallExprAST = {var, Pos, 'ActualResult'},
+    ActualCallAST =
+    erl_syntax:match_expr(MatchCallExprAST,
+        erl_syntax:application({atom, Pos, erlang}, {atom, Pos, apply},
+                              [{atom, Pos, Module}, NewName, 
+                              {var, Pos, 'AfterAdvised'}])),
+
+    FinalResult =
+    case annotation:has_advice(after_advice, A) of
+        false ->
+            {var, Pos, 'ActualResult'};
+        true ->
+            erl_syntax:application(ModAST, {atom, Pos, after_advice},
+                                   [erl_syntax:abstract(A),
+                                    ModAST, {atom, Pos, FName}, Vars,
+                                    {var, Pos, 'ActualResult'}])
+    end,
+    Patterns = [ {var, Pos, V} || V <- VarNames ],
+    MainClause = erl_syntax:clause(Patterns, none,
+                                   [PassThrough, ActualCallAST, FinalResult]),
+    NewImpl = erl_syntax:function({atom, Pos, FName}, [MainClause]),
+    {OrigImpl, [NewImpl], {OrigFN, FArity}}.
+
+do_rewrite_around_form(_Module, _Form, _Annotation) ->
+    throw(not_implemented).
 
 check_scope(Scope, Annotation) ->
     Allowed = annotations:get_scope(Annotation),
@@ -75,7 +158,7 @@ check_scope(Scope, Annotation) ->
         ok ->
             true;
         Other ->
-            io:format("Non-matching scope: ~p~n", [Other]),
+            progress_message("Non-matching scope: ~p~n", [Other]),
             false
     end.
 

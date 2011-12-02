@@ -23,6 +23,5 @@ demo() ->
 foo(T) ->
     {foo, T}.
 
--logging(debug).
 bar() ->
     bar.
