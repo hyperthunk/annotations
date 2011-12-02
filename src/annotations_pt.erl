@@ -144,7 +144,7 @@ do_rewrite_form(Module, Form, #annotation{name=AnnotationMod}=A) ->
     NewImpl = erl_syntax:function({atom, Pos, FName}, [MainClause]),
     {OrigImpl, [NewImpl], {OrigFN, FArity}}.
 
-do_rewrite_around_form(_Module, Form, #annotation{name=AnnotationMod}=A) ->
+do_rewrite_around_form(Module, Form, #annotation{name=AnnotationMod}=A) ->
     Pos = erl_syntax:get_pos(Form),
     {FName, FArity} = erl_syntax_lib:analyze_function(Form),
     Clauses = erl_syntax:function_clauses(Form),
@@ -158,7 +158,7 @@ do_rewrite_around_form(_Module, Form, #annotation{name=AnnotationMod}=A) ->
     FinalResult = 
     erl_syntax:application(ModAST, {atom, Pos, around_advice},
                            [erl_syntax:abstract(A),
-                            ModAST, {atom, Pos, FName}, Vars]),
+                            {atom, Pos, Module}, {atom, Pos, FName}, Vars]),
 
     Patterns = [ {var, Pos, V} || V <- VarNames ],
     MainClause = erl_syntax:clause(Patterns, none,
