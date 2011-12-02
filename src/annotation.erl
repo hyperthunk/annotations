@@ -24,7 +24,7 @@
 -module(annotation).
 -export([behaviour_info/1]).
 -export([has_advice/1, has_advice/2]).
--export([process_annotation/2, get_scope/0]).
+-export([process_annotation/2, call_advised/3, get_scope/0]).
 -annotation(['application', 'package', 'module']).
 
 -include("types.hrl").
@@ -36,6 +36,9 @@ behaviour_info(_) ->
 
 process_annotation(A, _Data) -> A.
 get_scope() -> 'function'.
+
+call_advised(M, F, Inputs) ->
+    erlang:apply(M, annotations:advised_name(F), Inputs).
 
 has_advice(#annotation{name=Module}) ->
     lists:member(true, all_advice(Module)).

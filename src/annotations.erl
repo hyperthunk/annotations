@@ -27,7 +27,8 @@
 -export([list/1, find_by_function/2, find/2, find/3]).
 
 %% parse_transform and runtime introspection utilities
--export([parse_transform/2, from_ast/2, get_scope/1, check_scope/2]).
+-export([parse_transform/2, from_ast/2, 
+         get_scope/1, advised_name/1, check_scope/2]).
 
 -type(target() :: atom() | {atom(), atom(), integer()}).
 -type(scope() :: 'application' | 'package' | 'module' | 'function' | '_').
@@ -115,6 +116,10 @@ is_annotation(MaybeAnnotation) ->
             end;
         _ -> false
     end.
+
+-spec(advised_name/1 :: (atom()) -> atom()).
+advised_name(FName) ->
+    list_to_atom(atom_to_list(FName) ++ "__advised").
 
 -spec(parse_transform/2 :: (list(term()), list({atom(),term()})) -> term()).
 parse_transform(AST, Options) ->

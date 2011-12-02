@@ -102,7 +102,7 @@ do_rewrite_form(Module, Form, #annotation{name=AnnotationMod}=A) ->
     Pos = erl_syntax:get_pos(Form),
     {FName, FArity} = erl_syntax_lib:analyze_function(Form),
     Clauses = erl_syntax:function_clauses(Form),
-    OrigFN = list_to_atom(atom_to_list(FName) ++ "__original"),
+    OrigFN = annotations:advised_name(FName),
     NewName = {atom, Pos, OrigFN},
     OrigImpl = erl_syntax:function(NewName, Clauses),
 
@@ -144,8 +144,27 @@ do_rewrite_form(Module, Form, #annotation{name=AnnotationMod}=A) ->
     NewImpl = erl_syntax:function({atom, Pos, FName}, [MainClause]),
     {OrigImpl, [NewImpl], {OrigFN, FArity}}.
 
-do_rewrite_around_form(_Module, _Form, _Annotation) ->
-    throw(not_implemented).
+do_rewrite_around_form(_Module, Form, #annotation{name=AnnotationMod}=A) ->
+    Pos = erl_syntax:get_pos(Form),
+    {FName, FArity} = erl_syntax_lib:analyze_function(Form),
+    Clauses = erl_syntax:function_clauses(Form),
+    OrigFN = annotations:advised_name(FName),
+    NewName = {atom, Pos, OrigFN},
+    OrigImpl = erl_syntax:function(NewName, Clauses),
+    
+    VarNames = erl_syntax_lib:new_variable_names(FArity, sets:new()),
+    Vars = erl_syntax:list([ {var, Pos, V} || V <- VarNames ]),
+    ModAST = {atom, Pos, AnnotationMod},
+    FinalResult = 
+    erl_syntax:application(ModAST, {atom, Pos, around_advice},
+                           [erl_syntax:abstract(A),
+                            ModAST, {atom, Pos, FName}, Vars]),
+
+    Patterns = [ {var, Pos, V} || V <- VarNames ],
+    MainClause = erl_syntax:clause(Patterns, none,
+                                   [FinalResult]),
+    NewImpl = erl_syntax:function({atom, Pos, FName}, [MainClause]),
+    {OrigImpl, [NewImpl], {OrigFN, FArity}}.
 
 check_scope(Scope, Annotation) ->
     Allowed = annotations:get_scope(Annotation),
