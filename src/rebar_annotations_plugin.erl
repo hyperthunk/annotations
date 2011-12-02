@@ -33,7 +33,6 @@ pre_compile(Config, _) ->
             file:write_file(CF, 
                             printable(AnnotationsConfig), [write]);
         _ ->
-            rebar_log:log(debug, "Bad config!~n", []),
             ok
     end.
 

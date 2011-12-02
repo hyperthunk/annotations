@@ -15,7 +15,13 @@ demo() ->
     io:format("    by Type + Mod + FunctionName: ~p~n",
               [annotations:find(logging, ?MODULE, foo)]),
     io:format("    for unrecognised type(s): ~p~n",
-            [annotations:find(barking, ?MODULE, bar)]).
+            [annotations:find(barking, ?MODULE, bar)]),
+    io:format("    calling an instrumented function:~n"),
+    %% this won't log, but....
+    {foo, _} = foo("Hello World!"),
+    put(loglevel, info),
+    %% now this one will!
+    foo("Hello World!").
 
 -transactional(requires_new).
 -logging(info).

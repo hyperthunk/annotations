@@ -1,12 +1,6 @@
 {application, annotations,
  [
-  {description, ""},
-  {vsn, "1"},
-  {registered, []},
-  {applications, [
-                  kernel,
-                  stdlib
-                 ]},
-  {mod, { annotations_app, []}},
-  {env, []}
+  {description, "Code MetaData and Instrumentation Tools"},
+  {vsn, "0.0.1"},
+  {applications, [kernel, stdlib]}
  ]}.

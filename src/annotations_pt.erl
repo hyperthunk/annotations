@@ -35,10 +35,7 @@ parse_transform(Forms0, Options) ->
     process_fun_accs(FunAccs, Forms, Opt).
 
 process_fun_accs(FuncAccs, Forms, Opt) ->
-
-    %% TODO: should these annotations be able to alter
-    %%       the things they are applied to!?
-
+    %% TODO: move the whole sweep to using parse_trans
     Mod = current_scope(Forms),
     ScopedAnnotations =
         [ annotations:from_ast(Form, {function, {Mod,Fn,A}}) ||
@@ -52,7 +49,6 @@ process_fun_accs(FuncAccs, Forms, Opt) ->
     maybe_apply_changes(NewForms, ScopedAnnotations).
 
 maybe_apply_changes(Forms0, ScopedAnnotations) ->
-    %lists:foldl(fun maybe_process_annotation/2, {ScopedAnnotations, [], NewForms).
     progress_message("Applying ~p scoped annotations~n", [length(ScopedAnnotations)]),
     parse_trans:top(fun(Forms, _Context) ->
                         {Forms2, {_, Acc2}} =
@@ -79,8 +75,7 @@ xform_fun(function, Form, Ctx, {Annotations, Acc}) ->
 xform_fun(_Thing, Form, _Ctx, Acc) ->
     {[], Form, [], true, Acc}.
 
-%% TODO: don't move the data around unnecessarily
-
+%% TODO: don't move the tuple elements around unnecessarily
 maybe_transform(_Module, Form, {[], Acc, NewForms}) ->
     {NewForms, Form, Acc};
 maybe_transform(Module, Form, {[Annotation|Rest], Acc, NewForms}) ->
