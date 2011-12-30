@@ -248,7 +248,7 @@ progress_message(Msg, Args) ->
 
 is_verbose() ->
     case application:get_env(rebar_global, verbose) of
-        false     -> check_env();
+        undefined -> check_env();
         {ok, "0"} -> check_env();
         {ok, "1"} -> rebar_verbose
     end.
