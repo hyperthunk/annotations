@@ -155,7 +155,7 @@ do_rewrite_around_form(Module, Form, #annotation{name=AnnotationMod}=A) ->
     VarNames = erl_syntax_lib:new_variable_names(FArity, sets:new()),
     Vars = erl_syntax:list([ {var, Pos, V} || V <- VarNames ]),
     ModAST = {atom, Pos, AnnotationMod},
-    FinalResult = 
+    FinalResult =
     erl_syntax:application(ModAST, {atom, Pos, around_advice},
                            [erl_syntax:abstract(A),
                             {atom, Pos, Module}, {atom, Pos, FName}, Vars]),
