@@ -81,6 +81,8 @@ maybe_transform(_Module, Form, {[], Acc, NewForms}) ->
 maybe_transform(Module, Form, {[Annotation|Rest], Acc, NewForms}) ->
     case annotation:has_advice(Annotation) of
         false ->
+            progress_message("Skipping unadvised annotation ~p~n",
+                             [Annotation]),
             maybe_transform(Module, Form, {Rest, Acc, NewForms});
         true ->
             {Form2, ExtraForms, Exp} = rewrite_form(Module, Form, Annotation),
