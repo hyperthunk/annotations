@@ -109,6 +109,8 @@ And now for an example session:
     a
     t4@malachi:simple $ 
 
+For an example of using *around advice* take a look in the `examples` directory.
+
 ## License
 
 This work is distributed under a permissive BSD-style license.
