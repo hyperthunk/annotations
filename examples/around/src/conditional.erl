@@ -26,6 +26,7 @@
 
 %% examples
 around_advice(#annotation{data={PropName, 'gt', Val}}, M, F, Inputs) ->
+    io:format("Checking for ~p in ~p~n", [PropName, Inputs]),
     case lists:keyfind(PropName, 1, erlang:hd(Inputs)) of
         false ->
             false;
