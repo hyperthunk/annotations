@@ -52,17 +52,9 @@ config_file() ->
     filename:join(rebar_utils:get_cwd(), "annotations.config").
 
 get_config(Config) ->
-    case is_basedir() of
-        false ->
+    case rebar_config:get_local(Config, annotations, []) of
+        [] -> 
             ignored;
-        true ->
-            case rebar_config:get_local(Config, annotations, []) of
-                [] -> 
-                    ignored;
-                AnnotationsConfig ->
-                    {config, AnnotationsConfig}
-            end
+        AnnotationsConfig ->
+            {config, AnnotationsConfig}
     end.
-
-is_basedir() ->
-    rebar_utils:get_cwd() == rebar_config:get_global(base_dir, undefined).
