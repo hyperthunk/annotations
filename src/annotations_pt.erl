@@ -69,7 +69,7 @@ xform_fun(function, Form, Ctx, {Annotations, Acc}) ->
                         check_scope({function, {Module, Name, Arity}}, A) ],
     progress_message("Found ~p applicable annotations for ~p~n",
                      [length(Applicable), Module]),
-    {NewForms, Form2, Acc2} = maybe_transform(Module, Form, 
+    {NewForms, Form2, Acc2} = maybe_transform(Module, Form,
                                               {Applicable, Acc, []}),
     {NewForms, Form2, [], true, {Annotations, Acc2}};
 xform_fun(_Thing, Form, _Ctx, Acc) ->
@@ -81,14 +81,56 @@ maybe_transform(_Module, Form, {[], Acc, NewForms}) ->
 maybe_transform(Module, Form, {[Annotation|Rest], Acc, NewForms}) ->
     case annotation:has_advice(Annotation) of
         false ->
-            progress_message("Skipping unadvised annotation ~p~n",
-                             [Annotation]),
-            maybe_transform(Module, Form, {Rest, Acc, NewForms});
+            case annotation:has_codegen(Annotation) of
+                true ->
+                    {ExtraForms, Exp} = gen_forms(Module, Form, Annotation),
+                    progress_message("Extra Forms: ~p~n", [ExtraForms]),
+                    progress_message("More Exports: ~p~n", [Exp]),
+                    maybe_transform(Module, Form,
+                                {Rest, Acc ++ Exp, NewForms ++ ExtraForms});
+                false ->
+                    progress_message("Skipping unadvised annotation ~p~n",
+                                     [Annotation]),
+                    maybe_transform(Module, Form, {Rest, Acc, NewForms})
+            end;
         true ->
             {Form2, ExtraForms, Exp} = rewrite_form(Module, Form, Annotation),
-            maybe_transform(Module, Form2, 
+            maybe_transform(Module, Form2,
                             {Rest, [Exp|Acc], ExtraForms ++ NewForms})
     end.
+
+gen_forms(Mod, Form, #annotation{name=AnnotationMod}=A) ->
+    lists:unzip([ gen_function(Mod, Form, Def, A) || Def <-
+                                AnnotationMod:codegen(A, Mod, Form) ]).
+
+%%
+%% @private
+%% We will eventually support three kinds of specification:
+%% 1. {AdviceFunctionName, TargetFunctionName, AnnotationInstance} 
+%%    NB: this one takes its arity from the annotated target
+%% 2. {AdviceFunctionName, TargetFunctionName, Arity, AnnotationInstance}
+%% 3. fun() (generation completely handled by the annotation callback module)
+%%
+gen_function(Mod, Form,
+            {Advice, Target, Arity, Data},
+                A=#annotation{name=AnnotMod}) when is_atom(Target) ->
+    progress_message("gen_function ~p:~p/~p -> ~p~n", [Mod, Target, Arity, Advice]),
+    Pos = erl_syntax:get_pos(Form),
+    {FName, _FArity} = erl_syntax_lib:analyze_function(Form),
+    NewName = {atom, Pos, Target},
+    VarNames = erl_syntax_lib:new_variable_names(Arity, sets:new()),
+    Vars = erl_syntax:list([ {var, Pos, V} || V <- VarNames ]),
+    ModAST = {atom, Pos, AnnotMod},
+    FunctionReturnValue =
+    erl_syntax:application(ModAST, {atom, Pos, delegate_advice},
+                           [erl_syntax:abstract(Data),
+                            {atom, Pos, Mod}, {atom, Pos, FName}, Vars]),
+    io:format("Application: ~p~n", [FunctionReturnValue]),
+    Patterns = [ {var, Pos, V} || V <- VarNames ],
+    MainClause = erl_syntax:clause(Patterns, none,
+                                   [FunctionReturnValue]),
+    NewImpl = erl_syntax:function({atom, Pos, NewName}, [MainClause]),
+    {NewImpl, {Target, Arity}}.
 
 rewrite_form(Module, Form, Annotation) ->
     case annotation:has_advice(around_advice, Annotation) of
@@ -127,7 +169,7 @@ do_rewrite_form(Module, Form, #annotation{name=AnnotationMod}=A) ->
     ActualCallAST =
     erl_syntax:match_expr(MatchCallExprAST,
         erl_syntax:application({atom, Pos, erlang}, {atom, Pos, apply},
-                              [{atom, Pos, Module}, NewName, 
+                              [{atom, Pos, Module}, NewName,
                               {var, Pos, 'AfterAdvised'}])),
 
     FinalResult =
@@ -153,7 +195,7 @@ do_rewrite_around_form(Module, Form, #annotation{name=AnnotationMod}=A) ->
     OrigFN = annotations:advised_name(FName),
     NewName = {atom, Pos, OrigFN},
     OrigImpl = erl_syntax:function(NewName, Clauses),
-    
+
     VarNames = erl_syntax_lib:new_variable_names(FArity, sets:new()),
     Vars = erl_syntax:list([ {var, Pos, V} || V <- VarNames ]),
     ModAST = {atom, Pos, AnnotationMod},
@@ -161,7 +203,7 @@ do_rewrite_around_form(Module, Form, #annotation{name=AnnotationMod}=A) ->
     erl_syntax:application(ModAST, {atom, Pos, around_advice},
                            [erl_syntax:abstract(A),
                             {atom, Pos, Module}, {atom, Pos, FName}, Vars]),
-
+    io:format("Application: ~p~n", [FinalResult]),
     Patterns = [ {var, Pos, V} || V <- VarNames ],
     MainClause = erl_syntax:clause(Patterns, none,
                                    [FinalResult]),

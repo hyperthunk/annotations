@@ -23,7 +23,7 @@
 %% -----------------------------------------------------------------------------
 -module(annotation).
 -export([behaviour_info/1]).
--export([has_advice/1, has_advice/2]).
+-export([has_advice/1, has_advice/2, has_codegen/1]).
 -export([process_annotation/2, call_advised/3, get_scope/0]).
 -annotation(['application', 'package', 'module']).
 
@@ -39,6 +39,9 @@ get_scope() -> 'function'.
 
 call_advised(M, F, Inputs) ->
     erlang:apply(M, annotations:advised_name(F), Inputs).
+
+has_codegen(#annotation{name=Module}) ->
+    erlang:function_exported(Module, codegen, 3).
 
 has_advice(#annotation{name=Module}) ->
     lists:member(true, all_advice(Module)).
