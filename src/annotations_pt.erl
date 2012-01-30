@@ -54,6 +54,7 @@ maybe_apply_changes(Forms0, ScopedAnnotations) ->
                         {Forms2, {_, Acc2}} =
                             parse_trans:transform(fun xform_fun/4,
                                     {ScopedAnnotations, []}, Forms, []),
+                        progress_message("Acc2 = ~p~n", [Acc2]),
                         Forms3 = lists:foldl(fun export_orig/2, Forms2, Acc2),
                         parse_trans:revert(Forms3)
                     end, Forms0, []).
@@ -87,7 +88,7 @@ maybe_transform(Module, Form, {[Annotation|Rest], Acc, NewForms}) ->
                     progress_message("Extra Forms: ~p~n", [ExtraForms]),
                     progress_message("More Exports: ~p~n", [Exp]),
                     maybe_transform(Module, Form,
-                                {Rest, Acc ++ Exp, NewForms ++ ExtraForms});
+                                {Rest, Exp ++ Acc, ExtraForms ++ NewForms});
                 false ->
                     progress_message("Skipping unadvised annotation ~p~n",
                                      [Annotation]),
@@ -106,14 +107,14 @@ gen_forms(Mod, Form, #annotation{name=AnnotationMod}=A) ->
 %%
 %% @private
 %% We will eventually support three kinds of specification:
-%% 1. {AdviceFunctionName, TargetFunctionName, AnnotationInstance} 
+%% 1. {AdviceFunctionName, TargetFunctionName, Data}
 %%    NB: this one takes its arity from the annotated target
-%% 2. {AdviceFunctionName, TargetFunctionName, Arity, AnnotationInstance}
+%% 2. {AdviceFunctionName, TargetFunctionName, Arity, Data}
 %% 3. fun() (generation completely handled by the annotation callback module)
 %%
 gen_function(Mod, Form,
             {Advice, Target, Arity, Data},
-                A=#annotation{name=AnnotMod}) when is_atom(Target) ->
+                #annotation{name=AnnotMod}) when is_atom(Target) ->
     progress_message("gen_function ~p:~p/~p -> ~p~n", [Mod, Target, Arity, Advice]),
     Pos = erl_syntax:get_pos(Form),
     {FName, _FArity} = erl_syntax_lib:analyze_function(Form),
@@ -122,14 +123,13 @@ gen_function(Mod, Form,
     Vars = erl_syntax:list([ {var, Pos, V} || V <- VarNames ]),
     ModAST = {atom, Pos, AnnotMod},
     FunctionReturnValue =
-    erl_syntax:application(ModAST, {atom, Pos, delegate_advice},
+    erl_syntax:application(ModAST, {atom, Pos, Advice},
                            [erl_syntax:abstract(Data),
                             {atom, Pos, Mod}, {atom, Pos, FName}, Vars]),
-    io:format("Application: ~p~n", [FunctionReturnValue]),
     Patterns = [ {var, Pos, V} || V <- VarNames ],
     MainClause = erl_syntax:clause(Patterns, none,
                                    [FunctionReturnValue]),
-    NewImpl = erl_syntax:function({atom, Pos, NewName}, [MainClause]),
+    NewImpl = erl_syntax:function(NewName, [MainClause]),
     {NewImpl, {Target, Arity}}.
 
 rewrite_form(Module, Form, Annotation) ->
