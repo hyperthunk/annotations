@@ -110,7 +110,7 @@ gen_forms(Mod, Form, #annotation{name=AnnotationMod}=A) ->
 %% 1. {AdviceFunctionName, TargetFunctionName, Data}
 %%    NB: this one takes its arity from the annotated target
 %% 2. {AdviceFunctionName, TargetFunctionName, Arity, Data}
-%% 3. fun() (generation completely handled by the annotation callback module)
+%% 3. {funName, fun()} (generation completely handled by the annotation callback module)
 %%
 gen_function(Mod, Form,
             {Advice, Target, Arity, Data},
