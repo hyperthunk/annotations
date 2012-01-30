@@ -23,7 +23,10 @@
 %% -----------------------------------------------------------------------------
 -module(rebar_annotations_plugin).
 
--export([pre_compile/2, post_compile/2]).
+-export([pre_compile/2, post_compile/2, pre_eunit/2, post_eunit/2]).
+
+pre_eunit(Config, AppFile) ->
+    pre_compile(Config, AppFile).
 
 pre_compile(Config, _) ->
     case get_config(Config) of
@@ -35,6 +38,9 @@ pre_compile(Config, _) ->
         _ ->
             ok
     end.
+
+post_eunit(Config, AppFile) ->
+    post_compile(Config, AppFile).
 
 post_compile(Config, _) ->
     case get_config(Config) of
