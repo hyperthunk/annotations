@@ -1,6 +1,6 @@
 {application, annotations,
  [
   {description, "Code MetaData and Instrumentation Tools"},
-  {vsn, "0.0.1"},
+  {vsn, "0.0.2"},
   {applications, [kernel, stdlib]}
  ]}.
