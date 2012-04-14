@@ -30,9 +30,10 @@ parse_transform(Forms0, Options) ->
     {ok, P} = file:get_cwd(),
     progress_message("~s: Options: ~p~n", [P, Options]),
     Opt = merge_options(Options),
-    {Forms, FunAccs, _} =
-        lists:foldl(fun pick_annotations/2, {[], [], Opt}, Forms0),
-    process_fun_accs(FunAccs, Forms, Opt).
+    {Forms, FunAccs, TopAccs, _} =
+        lists:foldl(fun pick_annotations/2, {[], [], [], Opt}, Forms0),
+    NewForms = maybe_apply_changes(Forms, TopAccs),
+    process_fun_accs(FunAccs, NewForms, Opt).
 
 process_fun_accs(FuncAccs, Forms, Opt) ->
     %% TODO: move the whole sweep to using parse_trans
@@ -73,6 +74,12 @@ xform_fun(function, Form, Ctx, {Annotations, Acc}) ->
     {NewForms, Form2, Acc2} = maybe_transform(Module, Form,
                                               {Applicable, Acc, []}),
     {NewForms, Form2, [], true, {Annotations, Acc2}};
+%xform_fun(attribute, {_, _, module, Module}=Form, _Ctx, {Annotations, Acc}) ->
+%    progress_message("Found ~p module level annotations for ~p~n",
+%                     [length(Annotations), Module]),
+%    {NewForms, Form2, Acc2} = maybe_transform(Module, Form,
+%                                              {Annotations, Acc, []}),
+%    {[], Form2, NewForms, false, Acc2};
 xform_fun(_Thing, Form, _Ctx, Acc) ->
     {[], Form, [], true, Acc}.
 
@@ -112,6 +119,10 @@ gen_forms(Mod, Form, #annotation{name=AnnotationMod}=A) ->
 %% 2. {AdviceFunctionName, TargetFunctionName, Arity, Data}
 %% 3. {funName, fun()} (generation completely handled by the annotation callback module)
 %%
+gen_function(_Mod, _Form, {Name, FunCode}, #annotation{name=_AnnotMod}) ->
+    NewImpl = erl_syntax:function(Name, FunCode),
+    Arity = erl_syntax:function_arity(NewImpl),
+    {NewImpl, {Name, Arity}};
 gen_function(Mod, Form,
             {Advice, Target, Arity, Data},
                 #annotation{name=AnnotMod}) when is_atom(Target) ->
@@ -224,31 +235,52 @@ process_attribute({attribute, L, N, _}=A, Mod, Opt) ->
     case is_annotation(N, Opt) of
         false -> A;
         _True ->
-            {attribute, L, annotation, annotations:from_ast(A, {'module', Mod})}
+            {attribute, L, annotation,
+                annotations:from_ast(A, {'module', Mod})}
     end.
 
 pick_annotations({attribute, _, _, _}=Form,
-                    {Forms, [{maybe,_}|_]=FuncAccs, Opt}) ->
-    {[Form|Forms], FuncAccs, Opt};
-pick_annotations({attribute, _, Name, _}=Form, {Forms, FuncAccs, Opt}) ->
+                    {Forms, [{maybe,_}|_]=FuncAccs, TopAccs, Opt}) ->
+    {[Form|Forms], FuncAccs, TopAccs, Opt};
+pick_annotations({attribute, _, Name, _}=Form,
+                 {Forms, FuncAccs, TopAccs, Opt}) ->
     case is_annotation(Name, Opt) of
         false ->
-            {[Form|Forms], FuncAccs, Opt};
+            {[Form|Forms], FuncAccs, TopAccs, Opt};
         _True ->
-            {Forms, [{maybe, Form}| FuncAccs], Opt}
+            case annotations:get_scope(Name) of
+                Scopes when is_list(Scopes) ->
+                    case lists:member(function, Scopes) of
+                        true ->
+                            {Forms, [{maybe, Form}| FuncAccs], TopAccs, Opt};
+                        _ ->
+                            case lists:member(module, Scopes) of
+                                true ->
+                                    {Forms, FuncAccs, [Form|TopAccs], Opt};
+                                false ->
+                                    %% TODO: log why we dropped it?
+                                    %% FIXME: set this at 'policy' level instead
+                                    {[Form|Forms], FuncAccs, TopAccs, Opt}
+                            end
+                    end;
+                _ -> 
+                    {Forms, [{maybe, Form}| FuncAccs], TopAccs, Opt}
+            end
     end;
 pick_annotations({function, _, FName, Arity, _}=Form,
-                 {Forms, [{maybe, Annotation}|FuncAccs], Opt}) ->
+                 {Forms, [{maybe, Annotation}|FuncAccs], TopAccs, Opt}) ->
     case lists:keyfind(FName, 1, FuncAccs) of
         false ->
-            {[Form|Forms], [{{FName, Arity}, [Annotation]}|FuncAccs], Opt};
+            {[Form|Forms],
+             [{{FName, Arity}, [Annotation]}|FuncAccs], TopAccs, Opt};
         {FName, Annotations} ->
             {[Form|Forms],
                 lists:keyreplace({FName, Arity}, 1, FuncAccs,
-                                {FName, [Annotation|Annotations]}), Opt}
+                                {FName, [Annotation|Annotations]}),
+                                TopAccs, Opt}
     end;
-pick_annotations(Form, {Acc1, Acc2, Opt}) ->
-    {[Form|Acc1], Acc2, Opt}.
+pick_annotations(Form, {Acc1, Acc2, TopAccs, Opt}) ->
+    {[Form|Acc1], Acc2, TopAccs, Opt}.
 
 current_scope(Forms) ->
     {attribute,_,module,Name} = lists:keyfind(module, 3, Forms),

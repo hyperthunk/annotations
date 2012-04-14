@@ -134,11 +134,11 @@ want sent to your `AdviceFunctionName` at runtime. The result of this will be
 a function which calls back into your module directly.
 
 In order to utilise (2), your `codegen/3` should return tuples which contain
-`{Name, fun()}` where `Name` is the name you wish to export and the 
-corresponding fun is the function you wish to generate. The idea of this API 
-is that you can use the `codegen` module from `parse_trans` to generate your
-function conveniently, and have the annotation processing engine deal with the
-rest.
+`{Name, Fun}` where `Name` is the name you wish to export and the 
+corresponding function definition is the function you wish to generate.
+The idea of this API is that you can use the `codegen` module from `parse_trans`
+to generate your function conveniently, and have the annotation processing
+engine deal with the wiring.
 
 For an example of code generation in practise, take a look at the 
 [delegate](https://github.com/hyperthunk/delegate) library.

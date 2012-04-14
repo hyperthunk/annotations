@@ -23,11 +23,13 @@
 %% -----------------------------------------------------------------------------
 -module(annotations).
 
+-include("types.hrl").
+
 -export([is_annotation/1, process_annotation/1]).
 -export([list/1, find_by_function/2, find/2, find/3]).
 
 %% parse_transform and runtime introspection utilities
--export([parse_transform/2, from_ast/2, 
+-export([parse_transform/2, from_ast/2, are_equal/2,
          get_scope/1, advised_name/1, check_scope/2]).
 
 -type(target() :: atom() | {atom(), atom(), integer()}).
@@ -36,12 +38,9 @@
                             {scope(), target()} |
                             {[scope()] | target() } |
                             'undefined').
--export_type([target/0, scope/0, annotation_scope/0]).
+-opaque annotation() :: #annotation{}.
 
--include("types.hrl").
-
--type(annotation() :: #annotation{}).
--export_type([annotation/0]).
+-export_type([annotation/0, target/0, scope/0, annotation_scope/0]).
 
 -define(DEFAULT_SCOPE, 'module').
 
@@ -98,6 +97,10 @@ get_scope(Annotation) ->
         '_'
     end.
 
+-spec are_equal(annotation(), annotation()) -> boolean().
+are_equal(#annotation{name=N1, scope=S1}, #annotation{name=N2, scope=S2}) ->
+    N1 =:= N2 andalso S1 == S2.
+
 -spec(is_annotation/1 :: (#annotation{} | atom() | tuple()) -> 
     boolean() | {boolean(), boolean()}).
 is_annotation(#annotation{name=Name}) -> {true, is_annotation(Name)};
@@ -153,7 +156,8 @@ filter(Type, Things) ->
 check_scope({Scope0, Target0}=A, {Scope1, Target1}=B) ->
     case check(Scope0, Scope1) of
         true ->
-            Checks = check_scope(tuple_to_list(Target0), tuple_to_list(Target1)),
+            Checks = check_scope(tuple_to_list(Target0),
+                                 tuple_to_list(Target1)),
             case lists:all(fun(X) -> X == ok end, Checks) of
                 true -> ok;
                 false ->
@@ -175,9 +179,13 @@ check_scope(Allowed, Required) ->
             {invalid_scope, {Required, Allowed}}
     end.
 
-check(A, B) when is_list(A) andalso is_atom(B) ->
-    lists:member(B, A);
-check(A, B) when is_atom(A) andalso is_list(B) ->
-    lists:member(A, B);
-check(A, B) ->
-    A == B.
+check(A, B) when is_list(A) andalso
+                 is_atom(B) -> lists:member(B, A);
+check(A, B) when is_atom(A) andalso
+                 is_list(B) -> lists:member(A, B);
+check(A, {B, _}) when is_atom(A) andalso
+                      is_atom(B) -> check(A, B);
+check([H|_]=A, {B, _}) when is_atom(H) andalso 
+                            is_list(A) andalso
+                            is_atom(B) -> check(A, B);
+check(A, B) -> A == B.

@@ -23,11 +23,14 @@
 %% -----------------------------------------------------------------------------
 -module(annotation).
 -export([behaviour_info/1]).
--export([has_advice/1, has_advice/2, has_codegen/1]).
+-export([has_advice/1, has_advice/2]).
+-export([has_codegen/1, has_rewrite/1, has_coregen/1]).
 -export([process_annotation/2, call_advised/3, get_scope/0]).
 -annotation(['application', 'package', 'module']).
 
 -include("types.hrl").
+
+%% TODO: introduce 'codegen' to the behaviour_info
 
 behaviour_info(callbacks) ->
     [{process_annotation, 2}, {get_scope, 0}];
@@ -42,6 +45,12 @@ call_advised(M, F, Inputs) ->
 
 has_codegen(#annotation{name=Module}) ->
     erlang:function_exported(Module, codegen, 3).
+
+has_coregen(#annotation{name=Module}) ->
+    erlang:function_exported(Module, coregen, 5).
+
+has_rewrite(#annotation{name=Module}) ->
+    erlang:function_exported(Module, rewrite, 1).
 
 has_advice(#annotation{name=Module}) ->
     lists:member(true, all_advice(Module)).
