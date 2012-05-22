@@ -291,10 +291,11 @@ progress_message(Msg, Args) ->
     end.
 
 is_verbose() ->
+    %% NB: we assume that if rebar is running, we're going to use the
+    %% rebar_log module, regardless of *what* the actual log level is
     case application:get_env(rebar_global, verbose) of
         undefined -> check_env();
-        {ok, "0"} -> check_env();
-        {ok, "1"} -> rebar_verbose
+        {ok, _}   -> rebar_verbose
     end.
 
 check_env() ->
