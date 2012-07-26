@@ -49,7 +49,8 @@ process_fun_accs(FuncAccs, Forms, Opt) ->
     maybe_apply_changes(NewForms, ScopedAnnotations).
 
 maybe_apply_changes(Forms0, ScopedAnnotations) ->
-    progress_message("Applying ~p scoped annotations~n", [length(ScopedAnnotations)]),
+    progress_message("Applying ~p scoped annotations~n",
+                     [length(ScopedAnnotations)]),
     parse_trans:top(fun(Forms, _Context) ->
                         {Forms2, {_, Acc2}} =
                             parse_trans:transform(fun xform_fun/4,
@@ -110,12 +111,14 @@ gen_forms(Mod, Form, #annotation{name=AnnotationMod}=A) ->
 %% 1. {AdviceFunctionName, TargetFunctionName, Data}
 %%    NB: this one takes its arity from the annotated target
 %% 2. {AdviceFunctionName, TargetFunctionName, Arity, Data}
-%% 3. {funName, fun()} (generation completely handled by the annotation callback module)
+%% 3. {funName, fun()} (generation completely handled
+%% by the annotation callback module)
 %%
 gen_function(Mod, Form,
             {Advice, Target, Arity, Data},
                 #annotation{name=AnnotMod}) when is_atom(Target) ->
-    progress_message("gen_function ~p:~p/~p -> ~p~n", [Mod, Target, Arity, Advice]),
+    progress_message("gen_function ~p:~p/~p -> ~p~n",
+                     [Mod, Target, Arity, Advice]),
     Pos = erl_syntax:get_pos(Form),
     {FName, _FArity} = erl_syntax_lib:analyze_function(Form),
     NewName = {atom, Pos, Target},
@@ -224,7 +227,8 @@ process_attribute({attribute, L, N, _}=A, Mod, Opt) ->
     case is_annotation(N, Opt) of
         false -> A;
         _True ->
-            {attribute, L, annotation, annotations:from_ast(A, {'module', Mod})}
+            {attribute, L, annotation,
+                annotations:from_ast(A, {'module', Mod})}
     end.
 
 pick_annotations({attribute, _, _, _}=Form,
