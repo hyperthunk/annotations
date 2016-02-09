@@ -68,6 +68,8 @@ foo(T) ->
     {foo, T}.
 ```
 
+## Building with rebar based project
+
 We'll need to export the `logging` annotation config in order for the parse
 transform to work, which we can do using the supplied rebar plugin:
 
@@ -86,6 +88,19 @@ transform to work, which we can do using the supplied rebar plugin:
 
 {erl_first_files, ["logging.erl"]}.
 ```
+
+## Building with erlang.mk based project
+
+An erlang.mk plugin is provided for easy integration with your project.
+
+```make
+DEPS = annotations
+DEP_PLUGINS = annotations
+
+ANNOTATIONS = logging
+```
+
+## Run
 
 And now for an example session:
 
