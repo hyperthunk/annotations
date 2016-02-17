@@ -2,5 +2,6 @@
  [
   {description, "Code MetaData and Instrumentation Tools"},
   {vsn, "0.0.2"},
+  {modules, []},
   {applications, [kernel, stdlib]}
  ]}.
