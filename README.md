@@ -1,7 +1,7 @@
 # Annotations - MetaData and Code Instrumentation for Erlang/OTP
 
 This library provides additional features for annotating code with metadata, as 
-well as support for compile time code instrumentation via a parse transform.
+well as support for compile time code instrumentation via a parse transform. See [here](https://github.com/nebularis/memoize/blob/master/src/memoize.erl) for a concrete usage example.
 
 ## Examples
 
